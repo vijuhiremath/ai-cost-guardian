@@ -195,6 +195,40 @@ FROM agent_health_anomalies;
 
 
 -- -----------------------------------------------------------------------------
+-- STEP 3.5A: Create MongoDB connection for vector search
+-- (skip if mongodb-connection already exists from Lab 2)
+-- -----------------------------------------------------------------------------
+
+CREATE CONNECTION `mongodb-connection`
+WITH (
+    'type'     = 'MONGODB',
+    'endpoint' = 'mongodb+srv://ai-cost-guardian.vfu4kla.mongodb.net/',
+    'username' = '<YOUR_MONGODB_USERNAME>',
+    'password' = '<YOUR_MONGODB_PASSWORD>'
+);
+
+
+-- -----------------------------------------------------------------------------
+-- STEP 3.5B: Create vector knowledge base table backed by MongoDB Atlas
+-- Run load_knowledge_base.py first to populate the collection with embeddings
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE documents_vectordb_aiops (
+    document_id STRING,
+    chunk       STRING,
+    embedding   ARRAY<FLOAT>
+) WITH (
+    'connector'                = 'mongodb',
+    'mongodb.connection'       = 'mongodb-connection',
+    'mongodb.database'         = 'aiops_knowledge',
+    'mongodb.collection'       = 'documents',
+    'mongodb.index'            = 'vector_index',
+    'mongodb.embedding_column' = 'embedding',
+    'mongodb.numCandidates'    = '500'
+);
+
+
+-- -----------------------------------------------------------------------------
 -- STEP 4: RAG enrichment — embed anomaly, vector search, LLM explains root cause
 -- -----------------------------------------------------------------------------
 
