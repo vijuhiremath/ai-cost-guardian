@@ -398,7 +398,9 @@ AS SELECT
 FROM ai_anomalies_enriched,
 LATERAL TABLE(AI_RUN_AGENT(
     `aiops_remediation_agent`,
-    `root_cause`,
-    `entity`,
-    `anomaly_type`
+    CONCAT(
+        'ANOMALY_TYPE: ', anomaly_type,
+        '\nENTITY: ', entity,
+        '\nROOT_CAUSE: ', root_cause
+    )
 ));
