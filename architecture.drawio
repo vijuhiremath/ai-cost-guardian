@@ -1,0 +1,93 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="AIOps Monitoring Agent">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="950" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="30" value="&lt;b&gt;&lt;font style='font-size: 16px;'&gt;AIOps Monitoring Agent — Pipeline&lt;/font&gt;&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" parent="1">
+          <mxGeometry x="334" y="0" width="400" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Step 1: Kafka Input Topics -->
+        <mxCell id="2" value="&lt;b&gt;Kafka Topic&lt;/b&gt;&lt;br&gt;llm_api_calls&lt;br&gt;&lt;font color='#555555'&gt;model, tokens, cost, team, latency, quality_score&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="40" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="3" value="&lt;b&gt;Kafka Topic&lt;/b&gt;&lt;br&gt;agent_traces&lt;br&gt;&lt;font color='#555555'&gt;agent_id, tool, status, loop_count, errors, tokens&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="640" y="40" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Step 2: Anomaly Detection -->
+        <mxCell id="4" value="&lt;b&gt;Step 2A — Flink Anomaly Detection&lt;/b&gt;&lt;br&gt;ML_DETECT_ANOMALIES&lt;br&gt;5-min windows per team + feature&lt;br&gt;&lt;i&gt;→ llm_cost_anomalies&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="220" width="290" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="5" value="&lt;b&gt;Step 2B — Flink Anomaly Detection&lt;/b&gt;&lt;br&gt;ML_DETECT_ANOMALIES&lt;br&gt;5-min windows per agent_id&lt;br&gt;&lt;i&gt;→ agent_health_anomalies&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="640" y="220" width="290" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Step 3: UNION ALL -->
+        <mxCell id="6" value="&lt;b&gt;Step 3 — Flink UNION ALL&lt;/b&gt;&lt;br&gt;&lt;i&gt;ai_anomalies&lt;/i&gt;&lt;br&gt;&lt;font color='#555555'&gt;anomaly_type | entity | metric | deviation_pct&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="334" y="390" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Step 4: RAG Enrichment -->
+        <mxCell id="8" value="&lt;b&gt;Step 4 — RAG Enrichment&lt;/b&gt;&lt;br&gt;ML_PREDICT (embed) → VECTOR_SEARCH_AGG → ML_PREDICT (LLM)&lt;br&gt;&lt;i&gt;→ ai_anomalies_enriched&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="294" y="550" width="370" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- MongoDB -->
+        <mxCell id="7" value="&lt;b&gt;MongoDB Atlas&lt;/b&gt;&lt;br&gt;Vector Search&lt;br&gt;&lt;font color='#555555'&gt;optimization strategies&lt;br&gt;+ failure patterns&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="840" y="490" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Azure OpenAI -->
+        <mxCell id="20" value="&lt;b&gt;Azure OpenAI&lt;/b&gt;&lt;br&gt;Embedding + Text Generation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="840" y="615" width="190" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Step 5: Agent Definition -->
+        <mxCell id="9" value="&lt;b&gt;Step 5 — Agent Definition&lt;/b&gt;&lt;br&gt;CREATE TOOL (Remote MCP — http_get + http_post)&lt;br&gt;CREATE AGENT (aiops_remediation_agent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="294" y="720" width="370" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Step 6: completed_actions -->
+        <mxCell id="10" value="&lt;b&gt;Step 6 — AI_RUN_AGENT&lt;/b&gt;&lt;br&gt;&lt;i&gt;completed_actions&lt;/i&gt;&lt;br&gt;&lt;font color='#555555'&gt;entity | root_cause | action_taken | api_response&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="309" y="880" width="340" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="11" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="2" target="4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="12" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="3" target="5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="4" target="6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="14" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="5" target="6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="15" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="6" target="8" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="16" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="7" target="8" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="20" target="8" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="17" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="8" target="9" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="18" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="9" target="10" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

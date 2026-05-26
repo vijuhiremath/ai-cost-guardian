@@ -24,6 +24,7 @@ import random
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ try:
     from confluent_kafka.schema_registry.avro import AvroSerializer
     from confluent_kafka.serialization import SerializationContext, MessageField
 except ImportError:
-    print("Missing dependencies. Run: pip install confluent-kafka python-dotenv")
+    print("Missing dependencies. Run: pip install 'confluent-kafka[avro,schema-registry]' python-dotenv")
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
@@ -45,8 +46,8 @@ except ImportError:
 
 LLM_API_CALL_SCHEMA = json.dumps({
     "type": "record",
-    "name": "llm_api_call_value",
-    "namespace": "com.aiops.monitoring",
+    "name": "llm_api_calls_value",
+    "namespace": "org.apache.flink.avro.generated.record",
     "fields": [
         {"name": "call_id", "type": "string"},
         {"name": "team", "type": "string"},
@@ -63,8 +64,8 @@ LLM_API_CALL_SCHEMA = json.dumps({
 
 AGENT_TRACE_SCHEMA = json.dumps({
     "type": "record",
-    "name": "agent_trace_value",
-    "namespace": "com.aiops.monitoring",
+    "name": "agent_traces_value",
+    "namespace": "org.apache.flink.avro.generated.record",
     "fields": [
         {"name": "trace_id", "type": "string"},
         {"name": "agent_id", "type": "string"},
@@ -127,7 +128,7 @@ def _make_llm_call(ts_ms: int, anomaly: bool = False, team: str = None) -> dict:
         "cost_usd": round(((in_tok + out_tok) / 1000) * m["cost_per_1k"] * mult, 6),
         "latency_ms": random.randint(3000, 9000) if anomaly else random.randint(150, 2500),
         "quality_score": round(random.uniform(0.65, 0.80) if anomaly else random.uniform(0.78, 0.97), 3),
-        "event_ts": ts_ms,
+        "event_ts": datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
     }
 
 
@@ -154,7 +155,7 @@ def _make_agent_trace(ts_ms: int, anomaly: bool = False, agent_id: str = None) -
         "loop_count": loop_count,
         "duration_ms": duration_ms,
         "tokens_used": tokens_used,
-        "event_ts": ts_ms,
+        "event_ts": datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
     }
 
 
@@ -183,37 +184,39 @@ def generate_events() -> tuple:
 
 def load_credentials() -> dict:
     creds = {
-        "bootstrap_servers":        os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
-        "kafka_api_key":            os.getenv("KAFKA_API_KEY"),
-        "kafka_api_secret":         os.getenv("KAFKA_API_SECRET"),
-        "schema_registry_url":      os.getenv("SCHEMA_REGISTRY_URL"),
-        "schema_registry_api_key":  os.getenv("SCHEMA_REGISTRY_API_KEY"),
+        "bootstrap_servers":          os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
+        "kafka_api_key":              os.getenv("KAFKA_API_KEY"),
+        "kafka_api_secret":           os.getenv("KAFKA_API_SECRET"),
+        "schema_registry_url":        os.getenv("SCHEMA_REGISTRY_URL"),
+        "schema_registry_api_key":    os.getenv("SCHEMA_REGISTRY_API_KEY"),
         "schema_registry_api_secret": os.getenv("SCHEMA_REGISTRY_API_SECRET"),
     }
+
+    # If .env isn't set, try auto-detecting from the workshop's Terraform state
+    if not all(creds.values()):
+        workshop_root = Path(__file__).parent.parent.parent / "Workshops" / "quickstart-streaming-agents"
+        if workshop_root.exists():
+            try:
+                sys.path.insert(0, str(workshop_root))
+                from scripts.common.terraform import extract_kafka_credentials
+                from scripts.common.cloud_detection import auto_detect_cloud_provider
+                tf_creds = extract_kafka_credentials(auto_detect_cloud_provider(), workshop_root)
+                creds = {
+                    "bootstrap_servers":          tf_creds["bootstrap_servers"],
+                    "kafka_api_key":              tf_creds["kafka_api_key"],
+                    "kafka_api_secret":           tf_creds["kafka_api_secret"],
+                    "schema_registry_url":        tf_creds["schema_registry_url"],
+                    "schema_registry_api_key":    tf_creds["schema_registry_api_key"],
+                    "schema_registry_api_secret": tf_creds["schema_registry_api_secret"],
+                }
+            except Exception as e:
+                pass
+
     missing = [k for k, v in creds.items() if not v]
     if missing:
         print(f"Missing environment variables: {', '.join(missing)}")
         print("Copy .env.example to .env and fill in your credentials.")
         sys.exit(1)
-
-    # If running alongside the workshop repo, auto-populate from Terraform state
-    workshop_root = Path(__file__).parent.parent.parent / "Workshops" / "quickstart-streaming-agents"
-    if workshop_root.exists() and not all(creds.values()):
-        try:
-            sys.path.insert(0, str(workshop_root))
-            from scripts.common.terraform import extract_kafka_credentials, get_project_root
-            from scripts.common.cloud_detection import auto_detect_cloud_provider
-            tf_creds = extract_kafka_credentials(auto_detect_cloud_provider(), workshop_root)
-            creds = {
-                "bootstrap_servers":          tf_creds["bootstrap_servers"],
-                "kafka_api_key":              tf_creds["kafka_api_key"],
-                "kafka_api_secret":           tf_creds["kafka_api_secret"],
-                "schema_registry_url":        tf_creds["schema_registry_url"],
-                "schema_registry_api_key":    tf_creds["schema_registry_api_key"],
-                "schema_registry_api_secret": tf_creds["schema_registry_api_secret"],
-            }
-        except Exception:
-            pass
 
     return creds
 
