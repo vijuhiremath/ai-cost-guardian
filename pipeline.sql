@@ -203,8 +203,8 @@ CREATE CONNECTION `mongodb-connection`
 WITH (
     'type'     = 'MONGODB',
     'endpoint' = 'mongodb+srv://ai-cost-guardian.vfu4kla.mongodb.net/',
-    'username' = '<YOUR_MONGODB_USERNAME>',
-    'password' = '<YOUR_MONGODB_PASSWORD>'
+    'username' = 'vijuhiremath',
+    'password' = 'iGGFzIu7jE2hfELD'
 );
 
 
@@ -229,10 +229,10 @@ CREATE TABLE documents_vectordb_aiops (
 
 
 -- -----------------------------------------------------------------------------
--- STEP 4: RAG enrichment — embed anomaly, vector search, LLM explains root cause
+-- STEP 4A: Embed each anomaly description
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE ai_anomalies_enriched
+CREATE TABLE ai_anomalies_embedded
 WITH ('changelog.mode' = 'append')
 AS SELECT
     a.entity,
@@ -240,10 +240,7 @@ AS SELECT
     a.window_time,
     a.metric_value,
     a.deviation_pct,
-    rad_with_rag.top_chunk_1,
-    rad_with_rag.top_chunk_2,
-    rad_with_rag.top_chunk_3,
-    TRIM(llm_response.response) AS root_cause
+    emb.embedding
 FROM ai_anomalies a,
 LATERAL TABLE(ML_PREDICT(
     'llm_embedding_model',
@@ -253,37 +250,68 @@ LATERAL TABLE(ML_PREDICT(
         '. Metric: ', CAST(a.metric_value AS STRING),
         ' (+', CAST(a.deviation_pct AS STRING), '% above expected).'
     )
-)) AS emb,
+)) AS emb;
+
+
+-- -----------------------------------------------------------------------------
+-- STEP 4B: Vector search — retrieve top 3 knowledge base chunks
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE ai_anomalies_with_context
+WITH ('changelog.mode' = 'append')
+AS SELECT
+    entity,
+    anomaly_type,
+    window_time,
+    metric_value,
+    deviation_pct,
+    vs.search_results[1].chunk AS top_chunk_1,
+    vs.search_results[2].chunk AS top_chunk_2,
+    vs.search_results[3].chunk AS top_chunk_3
+FROM ai_anomalies_embedded,
 LATERAL TABLE(
     VECTOR_SEARCH_AGG(
         documents_vectordb_aiops,
         DESCRIPTOR(embedding),
-        emb.embedding,
+        embedding,
         3
     )
-) AS vs,
+) AS vs;
+
+
+-- -----------------------------------------------------------------------------
+-- STEP 4C: LLM root cause generation
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE ai_anomalies_enriched
+WITH ('changelog.mode' = 'append')
+AS SELECT
+    entity,
+    anomaly_type,
+    window_time,
+    metric_value,
+    deviation_pct,
+    top_chunk_1,
+    top_chunk_2,
+    top_chunk_3,
+    TRIM(llm_response.response) AS root_cause
+FROM ai_anomalies_with_context,
 LATERAL TABLE(
     ML_PREDICT(
         'llm_textgen_model',
         CONCAT(
             'You are an AI operations expert. Identify the root cause of this anomaly in 1-2 sentences and suggest a specific remediation action.\n\n',
-            'ANOMALY: ', a.anomaly_type, ' for entity "', a.entity, '"',
-            ' at ', CAST(a.window_time AS STRING),
-            '. Value: ', CAST(a.metric_value AS STRING),
-            ' (+', CAST(a.deviation_pct AS STRING), '% above expected).\n\n',
+            'ANOMALY: ', anomaly_type, ' for entity "', entity, '"',
+            ' at ', CAST(window_time AS STRING),
+            '. Value: ', CAST(metric_value AS STRING),
+            ' (+', CAST(deviation_pct AS STRING), '% above expected).\n\n',
             'CONTEXT:\n',
-            vs.search_results[1].chunk, '\n',
-            vs.search_results[2].chunk, '\n',
-            vs.search_results[3].chunk
+            top_chunk_1, '\n',
+            top_chunk_2, '\n',
+            top_chunk_3
         )
     )
-) AS llm_response,
-LATERAL (
-    SELECT
-        vs.search_results[1].chunk AS top_chunk_1,
-        vs.search_results[2].chunk AS top_chunk_2,
-        vs.search_results[3].chunk AS top_chunk_3
-) AS rad_with_rag;
+) AS llm_response;
 
 
 -- -----------------------------------------------------------------------------
