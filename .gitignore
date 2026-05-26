@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Credentials
+.env
+credentials.env
+credentials.json
+*.pem
+*.key
+
+# Terraform state (contains live API keys)
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
